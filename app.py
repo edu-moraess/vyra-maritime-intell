@@ -345,7 +345,7 @@ def _render_sidebar(
         start_live = False
         stop_live = False
         st.markdown(
-            "<div class='side-section-title'>MISSION CONTEXT</div>",
+            "<div class='side-section-title'>" "MISSION CONTEXT" "</div>",
             unsafe_allow_html=True,
         )
         duration_options = list(COLLECTION_DURATION_OPTIONS)
