@@ -5,6 +5,7 @@
 - Repository: `edu-moraess/vyra-maritime-intell`
 - Priority branch: `feat/mie-p0-operational-reliability`
 - Baseline SHA confirmed remotely: `79d247df570d00e8f59edd84be61917f39f8527a`
+- Current audited commit: `a9650b266ac3e740cde38c11b7eba129a4359927`
 - Audit clone: `/home/ubuntu/mie-audit/repo`
 - Preservation branch: `audit/mie-baseline-79d247d`
 - Main was not modified, merged, force-pushed, or rewritten.
@@ -82,6 +83,6 @@ The provider owns network consumption and protocol parsing. The worker owns the 
 
 - Existing P0 implementation: IMPLEMENTED.
 - Current regression correction: IMPLEMENTED and TESTED.
-- Automated local validation: VERIFIED.
+- Automated local validation at `a9650b2`: VERIFIED (306 full-suite tests and 15 focused tests passed).
 - Real-network operational acceptance: BLOCKED pending credentials and deployment test.
 - Distributed ownership: NOT_IMPLEMENTED.

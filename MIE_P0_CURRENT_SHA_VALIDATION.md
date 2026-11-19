@@ -1,15 +1,16 @@
 # MIE P0 Current SHA Validation
 
-## Baseline and working tree
+## Provenance
 
-- Repository: `edu-moraess/vyra-maritime-intell`
-- Branch: `feat/mie-p0-operational-reliability`
-- Baseline SHA confirmed remotely: `79d247df570d00e8f59edd84be61917f39f8527a`
-- Working-tree change: one compatibility-preserving string-literal correction in `app.py`
-- Main branch: untouched
-- PR: #66 remains open; no merge or close operation performed
+| Reference | SHA / value |
+|---|---|
+| Original baseline | `79d247df570d00e8f59edd84be61917f39f8527a` |
+| Final commit | `a9650b266ac3e740cde38c11b7eba129a4359927` |
+| Branch | `feat/mie-p0-operational-reliability` |
+| Remote branch SHA confirmed | `a9650b266ac3e740cde38c11b7eba129a4359927` |
+| `main` remote SHA | `0aba4d44232b5278821c28e9a2e501eb8efded2d` |
 
-Because the correction is not committed yet, the tests below validate the working tree derived from the confirmed baseline SHA. The final commit SHA must be recorded after review and commit.
+The baseline-to-final change contains the compatibility-preserving `app.py` string-literal correction and the four P0 reports. No application behavior was changed by the correction.
 
 ## Environment
 
@@ -17,43 +18,64 @@ Because the correction is not committed yet, the tests below validate the workin
 - Python: 3.12
 - Isolated environment: `/home/ubuntu/mie-audit/.venv`
 - Dependencies: installed only from repository `requirements.txt`
-- External AIS credentials: not configured for this audit
-- Real network collection: not executed
+- External AIS credentials: not configured
+- Real AIS network collection: not executed
 
-## Commands and results
+## Evidence associated with each SHA
 
-| Command | Result | Evidence |
-|---|---:|---|
-| `python -m compileall -q app.py src tests` | PASS | No compiler output |
-| `python -m pytest -q` before correction | 305 passed, 1 failed | `tests/test_sidebar_surface.py::test_sidebar_keeps_mission_and_map_controls` |
-| `python -m pytest -q tests/test_ingestion_worker.py tests/test_aisstream_provider.py tests/test_ingestion_settings.py tests/test_process_engine_registry.py` before correction | 15 passed | Focused P0 suite |
-| `python -m pytest -q` after correction | 306 passed, 42 warnings | Full local suite |
-| Focused ingestion suite after correction | PASS | All focused tests passed |
-| `git diff --check` | PASS | No whitespace errors |
+| Check | Execution SHA | Working tree | Result | Evidence location |
+|---|---|---|---:|---|
+| Initial compileall | `79d247df570d00e8f59edd84be61917f39f8527a` | clean | PASS | `/home/ubuntu/mie-audit/evidence/compileall.txt` |
+| Initial focused P0 suite | `79d247df570d00e8f59edd84be61917f39f8527a` | clean | 15 passed | `/home/ubuntu/mie-audit/evidence/current-sha/pytest-ingestion.txt` |
+| Initial full suite | `79d247df570d00e8f59edd84be61917f39f8527a` | clean | 305 passed, 1 failed | `/home/ubuntu/mie-audit/evidence/current-sha/pytest-full.txt` |
+| Full suite after correction | baseline HEAD plus uncommitted `app.py` correction | modified | 306 passed | `/home/ubuntu/mie-audit/evidence/current-sha-after-fix/pytest-full.txt` |
+| Final compileall | `a9650b266ac3e740cde38c11b7eba129a4359927` | clean | PASS | `/home/ubuntu/mie-audit/evidence/final-sha-a9650b2/compileall.txt` |
+| Final full suite | `a9650b266ac3e740cde38c11b7eba129a4359927` | clean | 306 passed, 42 warnings | `/home/ubuntu/mie-audit/evidence/final-sha-a9650b2/pytest-full.txt` |
+| Final focused P0 suite | `a9650b266ac3e740cde38c11b7eba129a4359927` | clean | 15 passed | `/home/ubuntu/mie-audit/evidence/final-sha-a9650b2/pytest-focused.txt` |
+| Final `git diff --check` | `a9650b266ac3e740cde38c11b7eba129a4359927` | clean | PASS | terminal evidence |
 
-## Failure and correction
+The final SHA was explicitly revalidated after the commit; no result is being reconstructed from memory or transferred from a historical SHA.
 
-The initial full suite failed because the existing source-level sidebar contract searched for the literal `"MISSION CONTEXT"`, while the rendered HTML contained the same text inside a single quoted Python string. The correction split the adjacent Python string literals so the exact contract is present without changing the rendered HTML or UI behavior.
+## Initial regression and correction
 
-No test was weakened, deleted, or rewritten.
+The first full-suite run on the clean baseline produced 305 passing tests and one failure in `tests/test_sidebar_surface.py::test_sidebar_keeps_mission_and_map_controls`. The test searched for the exact source literal `"MISSION CONTEXT"`, while the rendered HTML contained the same text inside a single Python string. The correction split adjacent Python string literals without changing rendered HTML or UI behavior.
+
+The corrected working tree produced 306 passing tests, and the final commit was then independently revalidated with the same result. No test was weakened, deleted, or rewritten.
+
+## Warning summary at final SHA
+
+The 42 warnings are reproducible at `a9650b2`:
+
+- 2 `RuntimeWarning` groups from scikit-learn PCA explained-variance division.
+- 19 `ConvergenceWarning` groups from scikit-learn KMeans reporting one distinct point while two clusters were requested.
+- The same two categories occur in the test fixtures `test_session_analytics_provenance.py` and `test_temporal_cache_identity.py`.
+- No environmental or dependency warning category was observed.
+
+The warning causes and recommendations are documented in `MIE_WARNING_ANALYSIS.md`. Warnings were not suppressed and no PCA, KMeans, or Isolation Forest algorithm was changed.
+
+## Remote CI status
+
+PR #66 has one available GitHub Actions check named `test` / `Pytest`, associated with `a9650b2`, marked `FAILURE`. The job completed with no recorded steps (`steps: []`) and no retrievable failure log. It is therefore recorded as a CI execution/infrastructure failure with unknown cause, not as evidence that the local test suite failed. The local final-SHA evidence above is reproducible and passes.
 
 ## P0 evidence matrix
 
 | Area | Result | Classification |
 |---|---|---|
-| Compilation | Passed | VERIFIED |
-| Full unit/regression suite | 306 passed | VERIFIED |
+| Compilation at final SHA | PASS | VERIFIED |
+| Full local suite at final SHA | 306 passed | VERIFIED |
+| Focused ingestion/reliability suite at final SHA | 15 passed | VERIFIED |
 | Worker lifecycle | Focused tests passed | VERIFIED |
 | Queue overflow accounting | Focused tests passed | TESTED |
 | Provider parsing/reset | Focused tests passed | VERIFIED |
-| Process-local registry | Focused tests passed | VERIFIED |
+| Process-local registry | Focused tests passed | VERIFIED, process scope only |
 | Cross-process exclusivity | Not implemented | NOT_IMPLEMENTED |
 | Real AIS ingestion | Not executed | BLOCKED |
 | 30-minute continuity | Not executed | BLOCKED |
-| Multi-session navigation | Not executed | BLOCKED |
-| Long-outage recovery | Not executed against live provider | BLOCKED |
+| Multi-page navigation during real collection | Not executed | BLOCKED |
+| Long-outage recovery against live provider | Not executed | BLOCKED |
 | Production burst sizing | Not measured | PARTIALLY_VERIFIED |
+| Remote CI check | Failed without steps/log | BLOCKED |
 
 ## Limitations
 
-A passing local suite establishes reproducible behavior for the tested contracts. It does not establish live network availability, provider acceptance, deployment topology behavior, cross-process coordination, or production-rate queue sizing.
+A passing final-SHA local suite establishes reproducible behavior for the tested contracts. It does not establish live network availability, provider acceptance, deployment topology behavior, cross-process coordination, real-rate queue sizing, or production acceptance.
