@@ -137,3 +137,16 @@ def test_clear_session_resets_all_contact_selection_state():
         '"selected_mmsi_unified"',
     ):
         assert key in clear_block
+
+
+def test_region_widget_state_is_initialized_without_overwriting_operator_edits():
+    fn_source = ast.get_source_segment(_source(APP_PATH), _render_sidebar_node()) or ""
+    assert "initialize_region_widget_state(st.session_state, label, bbox)" in fn_source
+    assert 'st.session_state[f"monitor_region_{label}"] = selected_region' not in fn_source
+    assert 'st.session_state[key] = value' not in fn_source
+
+    region_source = _source(APP_PATH)
+    assert 'value=values[0]' not in region_source
+    assert 'value=values[1]' not in region_source
+    assert 'value=values[2]' not in region_source
+    assert 'value=values[3]' not in region_source
