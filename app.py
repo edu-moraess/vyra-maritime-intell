@@ -39,6 +39,7 @@ from src.ui.pages import (
     render_vessels,
 )
 from src.ui.presentation import inject_css, notice, render_header
+from src.ui.region_state import initialize_region_widget_state
 from src.ui.workspace_controls import NAVIGATION, render_aux_workspace_controls
 from src.ui.temporal import OPERATOR_TIMEZONE_OPTIONS
 
@@ -233,11 +234,10 @@ def _render_region_slot(
             "max_lat": f"region_{label.lower()}_max_lat",
             "max_lon": f"region_{label.lower()}_max_lon",
         }
-        values = _bbox_values(fallback)
-        min_lat = st.number_input("Min Latitude", value=values[0], min_value=-90.0, max_value=90.0, step=0.01, format="%.5f", key=keys["min_lat"])
-        min_lon = st.number_input("Min Longitude", value=values[1], min_value=-180.0, max_value=180.0, step=0.01, format="%.5f", key=keys["min_lon"])
-        max_lat = st.number_input("Max Latitude", value=values[2], min_value=-90.0, max_value=90.0, step=0.01, format="%.5f", key=keys["max_lat"])
-        max_lon = st.number_input("Max Longitude", value=values[3], min_value=-180.0, max_value=180.0, step=0.01, format="%.5f", key=keys["max_lon"])
+        min_lat = st.number_input("Min Latitude", min_value=-90.0, max_value=90.0, step=0.01, format="%.5f", key=keys["min_lat"])
+        min_lon = st.number_input("Min Longitude", min_value=-180.0, max_value=180.0, step=0.01, format="%.5f", key=keys["min_lon"])
+        max_lat = st.number_input("Max Latitude", min_value=-90.0, max_value=90.0, step=0.01, format="%.5f", key=keys["max_lat"])
+        max_lon = st.number_input("Max Longitude", min_value=-180.0, max_value=180.0, step=0.01, format="%.5f", key=keys["max_lon"])
         bbox = ((min_lat, min_lon), (max_lat, max_lon))
         st.caption(f"{label} · Custom · {format_bbox(bbox)}")
 
@@ -272,19 +272,7 @@ def _render_sidebar(
             existing.append(default_second)
         st.session_state["monitoring_bboxes"] = tuple(existing)
         for label, bbox in zip(("a", "b"), existing):
-            selected_region = region_name_for_bbox(bbox) or "Custom"
-            st.session_state[f"monitor_region_{label}"] = selected_region
-            if selected_region == "Custom":
-                for key, value in zip(
-                    (
-                        f"region_{label}_min_lat",
-                        f"region_{label}_min_lon",
-                        f"region_{label}_max_lat",
-                        f"region_{label}_max_lon",
-                    ),
-                    _bbox_values(bbox),
-                ):
-                    st.session_state[key] = value
+            initialize_region_widget_state(st.session_state, label, bbox)
 
         with st.expander("MAP CONFIGURATION", expanded=False):
             st.caption(
