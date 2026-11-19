@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from src.config.regions import REGION_PRESETS
-from src.ui.region_state import initialize_region_widget_state
+from src.region_state import initialize_region_widget_state
 
 
 def test_region_selection_survives_rerun_with_old_active_settings():
