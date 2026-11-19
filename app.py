@@ -39,7 +39,7 @@ from src.ui.pages import (
     render_vessels,
 )
 from src.ui.presentation import inject_css, notice, render_header
-from src.ui.region_state import initialize_region_widget_state
+from src.region_state import initialize_region_widget_state
 from src.ui.workspace_controls import NAVIGATION, render_aux_workspace_controls
 from src.ui.temporal import OPERATOR_TIMEZONE_OPTIONS
 
