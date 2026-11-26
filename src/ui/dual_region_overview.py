@@ -113,7 +113,7 @@ def _selected_region_vessel(snapshot: EngineSnapshot, selection_key: str):
     return next((v for v in snapshot.vessels if str(v.mmsi) == str(selected_mmsi)), None)
 
 
-def _render_map(label: str, bbox: RegionBBox, snapshot: EngineSnapshot, settings: AppSettings, controls, engine: MaritimeIntelligenceEngine, *, selection_key: str, map_key: str) -> None:
+def _render_map(label: str, bbox: RegionBBox, snapshot: EngineSnapshot, settings: AppSettings, controls, engine: MaritimeIntelligenceEngine, *, selection_key: str, map_key: str, show_contact_panel: bool = True):
     """Render one tactical map using isolated selection and widget state."""
     min_speed, include_stale, map_style, show_vectors, show_trails, show_behavior, show_hexbin, show_anomaly_types, show_freshness, show_anomaly_hotspots = controls
     region_snapshot = _regional_snapshot(snapshot, bbox)
@@ -156,9 +156,10 @@ def _render_map(label: str, bbox: RegionBBox, snapshot: EngineSnapshot, settings
         st.session_state.selected_mmsi = previous_global_selection
 
     selected = _selected_region_vessel(region_snapshot, selection_key)
-    if selected is not None:
+    if show_contact_panel and selected is not None:
         with st.container(key=f"tactical-contact-panel-{label.lower()}", border=True):
             render_vessel_quick_intelligence(selected, region_snapshot, show_gemini_hook=True, engine=engine)
+    return selected, region_snapshot
 
 
 def _unified_rows(snapshot: EngineSnapshot, bboxes: tuple[RegionBBox, ...], *, include_stale: bool, selected_mmsi: str | None) -> list[dict]:
@@ -232,31 +233,134 @@ def _render_unified_map(bboxes: tuple[RegionBBox, ...], snapshot: EngineSnapshot
                 render_vessel_quick_intelligence(selected, snapshot, show_gemini_hook=True, engine=engine)
 
 
+def _render_context_panel(selected, snapshot: EngineSnapshot, engine: MaritimeIntelligenceEngine, label: str) -> None:
+    """Render evidence-led vessel context beside the primary map."""
+    st.markdown(
+        "<div class='mie-context-head'><span>CONTACT INTELLIGENCE</span>"
+        f"<span>{label}</span></div>",
+        unsafe_allow_html=True,
+    )
+    if selected is None:
+        st.markdown(
+            "<div class='mie-context-empty'><strong>NO CONTACT SELECTED</strong>"
+            "<span>Select a real AIS target on the map to inspect its identity, "
+            "reported position, motion and available evidence.</span></div>",
+            unsafe_allow_html=True,
+        )
+        st.caption("No target details are inferred when no contact is selected.")
+        return
+    render_vessel_quick_intelligence(selected, snapshot, show_gemini_hook=True, engine=engine)
+
+
 def render_overview(engine: MaritimeIntelligenceEngine, snapshot: EngineSnapshot, settings: AppSettings) -> None:
-    """Render dual-region tactical monitoring in SPLIT or UNIFIED presentation modes."""
-    summary = snapshot.summary
+    """Render the command-workstation layout while preserving dual-region semantics."""
     monitoring = tuple(settings.monitoring_bboxes)
+    if not monitoring:
+        monitoring = (settings.bbox,)
+    summary = snapshot.summary
     region = "A + B" if len(monitoring) > 1 else (region_name_for_bbox(settings.bbox) or "CUSTOM")
     duration = f"Collection {snapshot.last_collection_seconds:.1f}s" if snapshot.last_collection_seconds > 0 else "Collection —"
-    render_ops_bar(live_state=snapshot.status.state, region=region, vessels=summary["active_vessels"], messages=f"{summary['messages']:,}", anomalies=summary["anomalies"], collection=duration, provenance="REAL AIS · VERIFIED SOURCE", avg_speed=f"{summary['average_speed_knots']:.1f} kn", last_message=snapshot.status.last_received_at.strftime("%H:%M:%S UTC") if snapshot.status.last_received_at else "—")
-    render_region_comparison(snapshot.region_comparison)
-    render_regional_events(snapshot.regional_events)
-    _render_environmental_context(snapshot, monitoring)
+
+    # Compact workstation chrome: operational state and real-session counters.
+    st.markdown(
+        """
+        <style>
+        .mie-workstation{border:1px solid #263746;background:linear-gradient(110deg,#111c27,#0b151e);
+          padding:9px 12px;margin:4px 0 10px;display:flex;justify-content:space-between;
+          align-items:center;gap:12px;flex-wrap:wrap}
+        .mie-workstation .eyebrow,.mie-context-head{font:600 .62rem 'IBM Plex Mono',monospace;
+          color:#8296a5;letter-spacing:.13em;text-transform:uppercase}
+        .mie-workstation .metrics{display:flex;gap:20px;flex-wrap:wrap}
+        .mie-workstation .metric b{display:block;font:600 .95rem 'IBM Plex Mono',monospace;color:#d9e4ea}
+        .mie-workstation .metric small{font:500 .56rem 'IBM Plex Mono',monospace;color:#8296a5;text-transform:uppercase}
+        .mie-workstation .source{font:500 .59rem 'IBM Plex Mono',monospace;color:#8296a5}
+        .mie-context-head{display:flex;justify-content:space-between;border-bottom:1px solid #345064;
+          padding:5px 0 9px;margin-bottom:9px}
+        .mie-context-empty{border:1px dashed #345064;background:#0d1923;padding:16px 12px;
+          display:flex;flex-direction:column;gap:8px;min-height:110px}
+        .mie-context-empty strong{font:600 .68rem 'IBM Plex Mono',monospace;color:#d4a017}
+        .mie-context-empty span{font-size:.78rem;line-height:1.5;color:#aab9c3}
+        .mie-map-stage{border:1px solid #263746;background:#0b1219;padding:7px}
+        @media(max-width:760px){.mie-workstation{align-items:flex-start}.mie-workstation .metrics{gap:12px}
+          .mie-workstation .metric b{font-size:.82rem}}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    state = str(snapshot.status.state or "UNKNOWN").upper()
+    render_ops_bar(
+        live_state=state, region=region, vessels=summary["active_vessels"],
+        messages=f"{summary['messages']:,}", anomalies=summary["anomalies"],
+        collection=duration, provenance="REAL AIS · VERIFIED SOURCE",
+        avg_speed=f"{summary['average_speed_knots']:.1f} kn",
+        last_message=snapshot.status.last_received_at.strftime("%H:%M:%S UTC")
+        if snapshot.status.last_received_at else "—",
+    )
     controls = _render_workspace_controls(engine, settings)
+
+    # Keep comparison and event data available, but move them below the live picture.
     if len(monitoring) >= 2:
-        map_mode = st.segmented_control("DISPLAY MODE", options=["SPLIT", "UNIFIED"], default="SPLIT", key="dual_region_map_mode", label_visibility="visible")
-        if map_mode == "UNIFIED":
-            _render_unified_map(monitoring[:2], snapshot, settings, controls, engine)
-        else:
-            with st.container(key="dual-region-split-view"):
-                st.markdown("<style>.st-key-dual-region-split-view [data-testid='stHorizontalBlock']{gap:0.6rem !important;}</style>", unsafe_allow_html=True)
-                col_a, col_b = st.columns(2, gap="small")
-                with col_a:
-                    _render_map("A", monitoring[0], snapshot, settings, controls, engine, selection_key="selected_mmsi_a", map_key="operational_ais_map_a")
-                with col_b:
-                    _render_map("B", monitoring[1], snapshot, settings, controls, engine, selection_key="selected_mmsi_b", map_key="operational_ais_map_b")
+        modes = ["A", "B", "UNIFIED", "SPLIT"]
+        mode = st.segmented_control(
+            "OPERATIONAL VIEW", options=modes, default="A",
+            key="mie_command_view_mode", label_visibility="visible",
+        )
     else:
-        _render_map("Region A", monitoring[0] if monitoring else settings.bbox, snapshot, settings, controls, engine, selection_key="selected_mmsi_region_a", map_key="operational_ais_map_region_a")
-    st.caption("Operational picture derived from live AIS observations. " + f"Areas: {region} · REAL AIS · Regional analysis remains separated in both SPLIT and UNIFIED modes.")
-    if controls[2] == "Nautical Chart":
-        st.caption("Nautical chart: © Open Waters: Seamap · © OpenStreetMap contributors · CC BY 4.0. Visualization only; not for navigation. Consult official nautical charts.")
+        mode = "A"
+
+    if mode == "SPLIT" and len(monitoring) >= 2:
+        with st.container(key="mie-command-split"):
+            col_a, col_b = st.columns(2, gap="small")
+            with col_a:
+                _render_map("A", monitoring[0], snapshot, settings, controls, engine,
+                            selection_key="selected_mmsi_a", map_key="operational_ais_map_a")
+            with col_b:
+                _render_map("B", monitoring[1], snapshot, settings, controls, engine,
+                            selection_key="selected_mmsi_b", map_key="operational_ais_map_b")
+    else:
+        selected = None
+        context_snapshot = snapshot
+        if mode == "UNIFIED" and len(monitoring) >= 2:
+            left_label = "A + B"
+            with st.container(key="mie-command-map-stage", border=True):
+                _render_unified_map(monitoring[:2], snapshot, settings, controls, engine)
+            selected_mmsi = st.session_state.get("selected_mmsi_unified")
+            selected = next((v for v in snapshot.vessels if str(v.mmsi) == str(selected_mmsi)), None)
+            context_snapshot = _unified_snapshot(snapshot, monitoring[:2])
+        else:
+            idx = 1 if mode == "B" and len(monitoring) > 1 else 0
+            left_label = "REGION B" if idx == 1 else "REGION A"
+            bbox = monitoring[idx]
+            with st.container(key="mie-command-map-stage", border=True):
+                selected, context_snapshot = _render_map(
+                    left_label, bbox, snapshot, settings, controls, engine,
+                    selection_key="selected_mmsi_b" if idx == 1 else "selected_mmsi_a",
+                    map_key="operational_ais_map_b" if idx == 1 else "operational_ais_map_a",
+                    show_contact_panel=False,
+                )
+        # Wide geospatial canvas with a compact, persistent intelligence rail.
+        # Streamlit columns naturally stack on narrow mobile viewports.
+        map_col, context_col = st.columns([3.25, 1.15], gap="medium")
+        # The map renderer above is kept in the main flow to preserve its widget
+        # identity; contextual intelligence follows as a dedicated right-side rail.
+        with context_col:
+            _render_context_panel(selected, context_snapshot, engine, left_label)
+            st.markdown("<div class='mie-context-head'>REGIONAL STATUS</div>", unsafe_allow_html=True)
+            st.caption(f"Monitoring areas · {len(monitoring)}")
+            for i, bbox in enumerate(monitoring[:2]):
+                st.caption(f"{'A' if i == 0 else 'B'} · {format_bbox(bbox)}")
+            st.caption("Position and movement fields are shown only when present in real AIS observations.")
+
+    with st.expander("REGIONAL INTELLIGENCE · DERIVED", expanded=False):
+        render_region_comparison(snapshot.region_comparison)
+    with st.expander("INTELLIGENCE EVENT TIMELINE · REAL AIS / DERIVED", expanded=True):
+        if snapshot.regional_events:
+            render_regional_events(snapshot.regional_events)
+        else:
+            st.caption("No regional events are available in the current session.")
+    _render_environmental_context(snapshot, monitoring)
+    st.caption(
+        "Operational picture derived from real AIS observations. Regional analysis remains "
+        "separated in SPLIT and UNIFIED modes; unavailable observations are never replaced with zero-valued contacts."
+    )
+
