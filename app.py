@@ -37,6 +37,7 @@ from src.ui.pages import (
     render_vessels,
 )
 from src.ui.presentation import inject_css, notice, render_header
+from src.ui.command_theme import inject_dark_theme
 from src.ui.workspace_controls import NAVIGATION, render_aux_workspace_controls
 from src.ui.temporal import OPERATOR_TIMEZONE_OPTIONS
 
@@ -51,6 +52,7 @@ st.set_page_config(
 )
 
 inject_css()
+inject_dark_theme()
 
 # Keep the native Streamlit sidebar as the widget host, but turn it into an
 # overlay drawer so opening it does not permanently consume workspace width.
