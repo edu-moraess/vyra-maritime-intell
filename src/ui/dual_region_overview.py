@@ -169,7 +169,7 @@ def _unified_rows(snapshot: EngineSnapshot, bboxes: tuple[RegionBBox, ...], *, i
     return rows
 
 
-def _render_unified_map(bboxes: tuple[RegionBBox, ...], snapshot: EngineSnapshot, settings: AppSettings, controls, engine: MaritimeIntelligenceEngine) -> None:
+def _render_unified_map(bboxes: tuple[RegionBBox, ...], snapshot: EngineSnapshot, settings: AppSettings, controls, engine: MaritimeIntelligenceEngine, *, show_contact_panel: bool = True) -> None:
     """Render all monitored regions in one enclosing tactical viewport."""
     unified_bbox = _unified_bbox(bboxes)
     min_speed, include_stale, map_style, show_vectors, show_trails, show_behavior, show_hexbin, show_anomaly_types, show_freshness, show_anomaly_hotspots = controls
@@ -226,7 +226,7 @@ def _render_unified_map(bboxes: tuple[RegionBBox, ...], snapshot: EngineSnapshot
         else:
             st.session_state.tactical_map_zoom = previous_zoom
     selected_mmsi = st.session_state.get(unified_selection_key)
-    if selected_mmsi:
+    if show_contact_panel and selected_mmsi:
         selected = next((v for v in snapshot.vessels if str(v.mmsi) == str(selected_mmsi)), None)
         if selected is not None:
             with st.container(key="tactical-contact-panel-unified", border=True):
@@ -320,29 +320,29 @@ def render_overview(engine: MaritimeIntelligenceEngine, snapshot: EngineSnapshot
     else:
         selected = None
         context_snapshot = snapshot
+        # Wide geospatial canvas with a persistent intelligence rail.
+        # Streamlit columns stack naturally on narrow mobile viewports.
+        map_col, context_col = st.columns([3.25, 1.15], gap="medium")
         if mode == "UNIFIED" and len(monitoring) >= 2:
             left_label = "A + B"
-            with st.container(key="mie-command-map-stage", border=True):
-                _render_unified_map(monitoring[:2], snapshot, settings, controls, engine)
+            context_snapshot = _unified_snapshot(snapshot, monitoring[:2])
             selected_mmsi = st.session_state.get("selected_mmsi_unified")
             selected = next((v for v in snapshot.vessels if str(v.mmsi) == str(selected_mmsi)), None)
-            context_snapshot = _unified_snapshot(snapshot, monitoring[:2])
+            with map_col:
+                with st.container(key="mie-command-map-stage", border=True):
+                    _render_unified_map(monitoring[:2], snapshot, settings, controls, engine, show_contact_panel=False)
         else:
             idx = 1 if mode == "B" and len(monitoring) > 1 else 0
             left_label = "REGION B" if idx == 1 else "REGION A"
             bbox = monitoring[idx]
-            with st.container(key="mie-command-map-stage", border=True):
-                selected, context_snapshot = _render_map(
-                    left_label, bbox, snapshot, settings, controls, engine,
-                    selection_key="selected_mmsi_b" if idx == 1 else "selected_mmsi_a",
-                    map_key="operational_ais_map_b" if idx == 1 else "operational_ais_map_a",
-                    show_contact_panel=False,
-                )
-        # Wide geospatial canvas with a compact, persistent intelligence rail.
-        # Streamlit columns naturally stack on narrow mobile viewports.
-        map_col, context_col = st.columns([3.25, 1.15], gap="medium")
-        # The map renderer above is kept in the main flow to preserve its widget
-        # identity; contextual intelligence follows as a dedicated right-side rail.
+            with map_col:
+                with st.container(key="mie-command-map-stage", border=True):
+                    selected, context_snapshot = _render_map(
+                        left_label, bbox, snapshot, settings, controls, engine,
+                        selection_key="selected_mmsi_b" if idx == 1 else "selected_mmsi_a",
+                        map_key="operational_ais_map_b" if idx == 1 else "operational_ais_map_a",
+                        show_contact_panel=False,
+                    )
         with context_col:
             _render_context_panel(selected, context_snapshot, engine, left_label)
             st.markdown("<div class='mie-context-head'>REGIONAL STATUS</div>", unsafe_allow_html=True)
